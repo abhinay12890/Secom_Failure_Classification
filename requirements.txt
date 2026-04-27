@@ -1,6 +1,7 @@
 fastapi
-mlflow
-scikit-learn
+joblib
+lightgbm
 uvicorn
 numpy
+pandas
 pydantic
