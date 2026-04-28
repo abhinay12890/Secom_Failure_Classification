@@ -2,10 +2,16 @@
 ## Overview
 This project focuses on building a robust machine learning pipeline to detect manufacturing failures using the SECOM dataset (high-dimensional, highly imbalanced data).
 
+Dataset Details:
+* Rows: 1567
+* Columns: 592
+* Problem Type: Binary Classification (Highly Imbalanced) (0:1463, 1:104) with target mapping ({-1:0,1:1})
+
 The workflow covers:
 - Data preprocessing & feature reduction
 - Model experimentation & selection
 - MLflow-based experiment tracking
+- Hyperparameter tuning of the best model
 - Threshold tuning for imbalanced classification
 - API deployment using FastAPI
 - Containerization with Docker
@@ -13,69 +19,72 @@ The workflow covers:
 
 ## Project Structure
 ```
-├── app/     
-│   ├── main.py                # FastAPI Application
-│   ├── config.json            # contains selected features and threshold
-│
-├── model/                     # Saved Model
-│   └── exported_model/
-├── Secom_Notebook.ipynb       # Notebook file
-├── Dockerfile                 # File for Dockerization
-├── requirements.txt           # requirements for application
-├── .dockerignore
-├── .gitignore
-└── .github/
-    └── workflows/
-        └── ci.yml
+├── .github/                 # GitHub Actions workflows (CI/CD pipelines)
+├── .dockerignore           # Files ignored during Docker build
+├── .gitignore              # Files ignored by Git
+├── Dockerfile              # Docker image configuration for deployment
+├── README.md               # Project documentation
+
+├── Secom_Notebook.ipynb    # Exploratory data analysis & experimentation
+├── config.json             # Stores selected features & decision threshold
+├── final_model.pkl         # Trained ML pipeline (production-ready model)
+
+├── main.py                 # FastAPI application (inference API)
+├── testing.py              # Script for testing predictions locally
+├── sample_test.pkl         # Sample input data for testing API/model
+
+├── requirements.txt        # Python dependencies
 ```
 ## Results
-**Top K- experimentation aganist PR-AUC Scores**
+**Top K- experimentation aganist PR-AUC Scores (on right)**
 
-![K-values](feature_performance.png)
+![dashboard](dashboard.png)
 
-*K=100 has the highest PR-AUC score of 0.23*
+*K=50 has the highest PR-AUC score of 0.216 on validation data derived from stratifiedkfolds*
 
-**Different Model Performances against PR-AUC Scores on selected top-100 features**
-![Model-selection](model_selection.png)
+**Different Model Performances against PR-AUC Scores on selected top-50 features (on left)**
+*Selected **LightGBM** as best performing model with PR-AUC of 0.19*
 
-*Selected **Random Forest** as best performing model with PR-AUC of 0.26*
+**Hyperparameter Tuning of the best model (LightGBM) with selected Top-50 features using optuna on validation data derived from stratifiedkfold**
 
-**Hyperparameter Tuning of the best model (RandomForest) with selected Top-100 features**
+Best Parameters found: {'n_estimators': 353, 'max_depth': 4, 'learning_rate': 0.038782235731028326, 'num_leaves': 92, 'min_child_samples': 50, 'subsample': 0.951684162524425, 'colsample_bytree': 0.7852808947876807} *resulted in pr_auc score: 0.224*
 
-![parameter_tuning](parameter_tuning.png)
-
-Best Parameters found: {n_estimators: 100, max_depth: 10, min_split: 5, min_leaf: 1} *resulted in pr_auc score: 0.331 and roc-auc score: 0.782*
-
-**26.92% improvement from baseline in pr_auc acheieved by hyperparamter tuning**
+**3.7% improvement from baseline in pr_auc acheieved by hyperparamter tuning**
 
 
 Predicted Probabilities on test data and evaluated **Precision**, **Recall**, **F1-Score** at multiple thresholds and optimal threshold is selected based on max **F1-Score** for balanced performance.
+
+Final Model Performance on Test Data: 
+
+**PR-AUC:  0.198**
+**ROC-AUC:  0.675**
 
 **Untuned Performance**
 
 | Class | Precision | Recall | F1-Score | Support |
 | :--- | :--- | :--- | :--- | :--- |
-| **0 (Fail)** | 0.93 | 1.00 | 0.97 | 293 |
-| **1 (Pass)** | 0.00 | 0.00 | 0.00 | 21 |
-| **Accuracy** | | | **0.93** | 314 |
+| **0 (Fail)** | 0.94 | 0.99 | 0.96 | 440 |
+| **1 (Pass)** | 0.29 | 0.06 | 0.11 | 31 |
+| **Accuracy** | | | **0.93** | 471 |
 
 ![threshold_tuning](threshold_tuning.png)
 
-**Tuned Performance** *@0.217*
+**Tuned Performance** *@0.151*
 
 | Class | Precision | Recall | F1-Score | Support |
 | :--- | :--- | :--- | :--- | :--- |
-| **0 (Pass)** | 0.96 | 0.97 | 0.97 | 293 |
-| **1 (Fail)** | 0.56 | 0.48 | 0.51 | 21 |
-| **Accuracy** | | | **0.94** | 314 |
+| **0 (Pass)** | 0.95 | 0.94 | 0.95 | 440 |
+| **1 (Fail)** | 0.29 | 0.32 | 0.30 | 31 |
+| **Accuracy** | | | **0.90** | 471 |
 
-**Improved Minority Class F1 from 0 → 0.51**\
-This model is saved in local directory using `mlflow.sklearn.save_model(model,"exported_model")`
+* Improved Minority Class F1 from (11% → 30%)
+* Significant improvement in minority class recall (6% → 32%)
 
-## Dataset Details
-* Rows: 1567
-* Columns: 592
-* Problem Type: Binary Classification (Highly Imbalanced) (0:1463, 1:104) with target mapping ({-1:0,1:1})
+### Final Pipeline
+```
+SimpleImputer(strategy="median") → VarianceThreshold(threshold=0.01) → SelectKBest(score_func="mutual_info_classif,k=50) → LGBMClassifier(**best_params) → Output
+```
+This pipeline is saved in local directory using `joblib` as `final_model.pkl` for API deployment
 
 ## Data Preprocessing Pipeline
 **1. Missng Value Analysis :** Computed null percentage per columns and selected a cutoff of 60 % through histogram, dropping columns having >60% of null values.\
@@ -84,11 +93,11 @@ This model is saved in local directory using `mlflow.sklearn.save_model(model,"e
 **4. Stratified Train Test Split :** to preserve class distribution in both train and test datasets.
 
 ## Feature Selection Strategy
-* Used **SelectKBest(f_classif)**
-* Evaluated multiple *k* values: [50,75,100,125,150,175,200]
+* Used **SelectKBest(mutual_info_classif)**
+* Evaluated multiple *k* values: [50,100,150,200,250,275,300]
 * Tracked experiments using **MLFlow**
 * Metric used: **PR-AUC** for comparision across k values on different folds (n_splits=5) aggregated PR-AUC across folds for different k values on **validation data** subsetted from training data with preserved class balance.
-**Selected Top k(100)** features based on the best aggregated **PR-AUC** across splits for stability.
+**Selected Top k(50)** features based on the best aggregated **PR-AUC** across splits for stability.
 
 ## Model Training & Comparision
 Trained multiple models with selected top 100 features evaluated using PR-AUC
@@ -100,33 +109,29 @@ Trained multiple models with selected top 100 features evaluated using PR-AUC
 Handling Imbalance
 * `class_weight="balanced"` (where applicable)
 * LightGBM → `scale_pos_weight`\
-**Best Model: RandomForest, PR-AUC: 0.26** (outperformed all other models)
+**Best Model: LightGBM, PR-AUC: 0.19** (outperformed all other models)
 
-## Hyperparameter Tuning on test data
+## Hyperparameter Tuning on validation data for LightGBM using optuna for max PR-AUC Scoring
 * Tuned:
-  * `n_estimators`
-  * `max_depth`
-  * `min_samples_split`
-  * `min_samples_leaf`
-* Logged every run in MLFlow
-* Selected best configuration based on PR-AUC
+  * `n_estimators` ,`max_depth`, * `min_child_samples`, `learning_rate`, `num_leaves`, `sub-sample`,
+`colsample_bytree`
+* Selected best configuration based on mean PR-AUC across folds.
 
 ## Configuration Management 
 Saved in (config.json):
-* Selected features (Top 100)
+* Selected features (Top 50)
 * Optimal threshold
 
 ## API Deployment
 Built inference API using **FastAPI**
 Features:
 * Loads trained model
-* Arranges features in the training order of the model using `config.json`
 * Raises error on missing features
 * Used Tuned threshold
 * Returns classification output and probability of pass or fail
 
 ## Dockerization through GitHub Actions (CI/CD)
-* Created workflow to auto build docker image of the entire repository
+* Created workflow to auto build docker image of the fastapi applicaiton.
 * Pushed image to [Docker Repository](https://hub.docker.com/repository/docker/abhinay1289/secom-app) for serving the model
 
 ## Cloud Deployment
