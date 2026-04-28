@@ -36,25 +36,25 @@ The workflow covers:
 ├── requirements.txt        # Python dependencies
 ```
 ## Results
-**Top K- experimentation aganist PR-AUC Scores (on right)**
-
 ![dashboard](dashboard.png)
 
-*K=50 has the highest PR-AUC score of 0.216 on validation data derived from stratifiedkfolds*
-
-**Different Model Performances against PR-AUC Scores on selected top-50 features (on left)**
-*Selected **LightGBM** as best performing model with PR-AUC of 0.19*
-
-**Hyperparameter Tuning of the best model (LightGBM) with selected Top-50 features using optuna on validation data derived from stratifiedkfold**
-
-Best Parameters found: {'n_estimators': 353, 'max_depth': 4, 'learning_rate': 0.038782235731028326, 'num_leaves': 92, 'min_child_samples': 50, 'subsample': 0.951684162524425, 'colsample_bytree': 0.7852808947876807} *resulted in pr_auc score: 0.224*
-
-**3.7% improvement from baseline in pr_auc acheieved by hyperparamter tuning**
-
+1. Feature Selection (Top-K Experimentation) (on right)
+   * Evaluated k ∈ [50, 100, 150, 200, 225, 250, 275, 300]
+   * Metric: Mean PR-AUC (Stratified K-Fold)
+   * Tracked using MLflow
+     **Best K=50; PR-AUC: 0.216**
+2. Model Comparision (on left)
+   * RandomForest, XGBoost, Logistic Regression, LightGBM
+   * **Selected LightGBM; PR-AUC: 0.19**
+3. Hyperparameter tuning (Optuna)
+   * Objective: Maximize PR-AUC
+   * Validation: Stratified K-Fold
+   * Best Parameters: `{'n_estimators': 353, 'max_depth': 4, 'learning_rate': 0.038782235731028326, 'num_leaves': 92, 'min_child_samples': 50, 'subsample': 0.951684162524425, 'colsample_bytree': 0.7852808947876807}`
+   * **Tuned PR-AUC: 0.224** *3.7% improvement from base pr_auc*
 
 Predicted Probabilities on test data and evaluated **Precision**, **Recall**, **F1-Score** at multiple thresholds and optimal threshold is selected based on max **F1-Score** for balanced performance.
 
-Final Model Performance on Test Data: 
+### Final Model Performance on Test Data:
 
 **PR-AUC:  0.198**
 **ROC-AUC:  0.675**
